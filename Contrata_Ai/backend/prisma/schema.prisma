@@ -1,0 +1,266 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CONTRATANTE
+  PRESTADOR
+  ADMIN
+}
+
+enum ContractStatus {
+  PENDENTE
+  ACEITO
+  RECUSADO
+  EM_ANDAMENTO
+  CONCLUIDO
+  CANCELADO
+}
+
+enum ProposalStatus {
+  PENDENTE
+  ACEITA
+  RECUSADA
+  CANCELADA
+}
+
+enum JobStatus {
+  ATIVO
+  PAUSADO
+  ENCERRADO
+  CONCLUIDO
+}
+
+enum Gender {
+  MASCULINO
+  FEMININO
+  OUTRO
+  PREFIRO_NAO_INFORMAR
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  password        String
+  name            String
+  phone           String?
+  avatarUrl       String?
+  role            UserRole  @default(CONTRATANTE)
+  bio             String?
+  cpfCnpj         String?
+  birthDate       DateTime?
+  gender          Gender?
+  cep             String?
+  address         String?
+  city            String?
+  state           String?
+  isVerified      Boolean   @default(false)
+  isPremium       Boolean   @default(false)
+  rating          Float     @default(0)
+  reviewCount     Int       @default(0)
+  completedJobs   Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Provider-specific
+  categories      Category[]    @relation("UserCategories")
+  professionalSummary String?
+  experience      String?
+  hourlyRate      Float?
+
+  // Relations
+  jobsPosted      Job[]         @relation("ContratanteJobs")
+  proposals       Proposal[]    @relation("PrestadorProposals")
+  contractsAsContratante Contract[] @relation("ContratanteContracts")
+  contractsAsPrestador   Contract[] @relation("PrestadorContracts")
+  sentMessages    Message[]     @relation("SentMessages")
+  receivedMessages Message[]    @relation("ReceivedMessages")
+  chatRoomsAsUser1 ChatRoom[]   @relation("ChatUser1")
+  chatRoomsAsUser2 ChatRoom[]   @relation("ChatUser2")
+  reviewsGiven    Review[]      @relation("ReviewerUser")
+  reviewsReceived Review[]      @relation("ReviewedUser")
+  services        Service[]     @relation("ProviderServices")
+  notifications   Notification[]
+  serviceHistory  ServiceHistory[]
+
+  @@map("users")
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  icon        String?
+  description String?
+  users       User[]   @relation("UserCategories")
+  jobs        Job[]
+  services    Service[]
+  createdAt   DateTime @default(now())
+
+  @@map("categories")
+}
+
+model Job {
+  id          String     @id @default(cuid())
+  title       String
+  description String
+  budget      Float?
+  budgetType  String?    // FIXO, HORA, NEGOCIAVEL
+  location    String?
+  city        String?
+  state       String?
+  cep         String?
+  street      String?
+  neighborhood String?
+  addressNumber String?
+  isRemote    Boolean    @default(false)
+  status      JobStatus  @default(ATIVO)
+  deadline    DateTime?
+  categoryId  String?
+  category    Category?  @relation(fields: [categoryId], references: [id])
+  contratanteId String
+  contratante User       @relation("ContratanteJobs", fields: [contratanteId], references: [id])
+  proposals   Proposal[]
+  contracts   Contract[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@map("jobs")
+}
+
+model Service {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  price       Float
+  priceType   String   // FIXO, HORA, PROJETO
+  duration    String?
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id])
+  providerId  String
+  provider    User     @relation("ProviderServices", fields: [providerId], references: [id])
+  imageUrl    String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("services")
+}
+
+model Proposal {
+  id          String         @id @default(cuid())
+  message     String
+  value       Float?
+  deadline    DateTime?
+  status      ProposalStatus @default(PENDENTE)
+  jobId       String
+  job         Job            @relation(fields: [jobId], references: [id])
+  prestadorId String
+  prestador   User           @relation("PrestadorProposals", fields: [prestadorId], references: [id])
+  contractId  String?
+  contract    Contract?      @relation(fields: [contractId], references: [id])
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@map("proposals")
+}
+
+model Contract {
+  id              String         @id @default(cuid())
+  status          ContractStatus @default(PENDENTE)
+  value           Float?
+  startDate       DateTime?
+  endDate         DateTime?
+  description     String?
+  jobId           String?
+  job             Job?           @relation(fields: [jobId], references: [id])
+  contratanteId   String
+  contratante     User           @relation("ContratanteContracts", fields: [contratanteId], references: [id])
+  prestadorId     String
+  prestador       User           @relation("PrestadorContracts", fields: [prestadorId], references: [id])
+  proposals       Proposal[]
+  reviews         Review[]
+  serviceHistory  ServiceHistory[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@map("contracts")
+}
+
+model ChatRoom {
+  id        String    @id @default(cuid())
+  user1Id   String
+  user1     User      @relation("ChatUser1", fields: [user1Id], references: [id])
+  user2Id   String
+  user2     User      @relation("ChatUser2", fields: [user2Id], references: [id])
+  messages  Message[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([user1Id, user2Id])
+  @@map("chat_rooms")
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  content    String
+  isRead     Boolean  @default(false)
+  chatRoomId String
+  chatRoom   ChatRoom @relation(fields: [chatRoomId], references: [id])
+  senderId   String
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiverId String
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@map("messages")
+}
+
+model Review {
+  id          String   @id @default(cuid())
+  rating      Int      // 1-5
+  comment     String?
+  contractId  String
+  contract    Contract @relation(fields: [contractId], references: [id])
+  reviewerId  String
+  reviewer    User     @relation("ReviewerUser", fields: [reviewerId], references: [id])
+  reviewedId  String
+  reviewed    User     @relation("ReviewedUser", fields: [reviewedId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@map("reviews")
+}
+
+model ServiceHistory {
+  id          String         @id @default(cuid())
+  contractId  String
+  contract    Contract       @relation(fields: [contractId], references: [id])
+  userId      String
+  user        User           @relation(fields: [userId], references: [id])
+  status      ContractStatus
+  note        String?
+  createdAt   DateTime       @default(now())
+
+  @@map("service_history")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  type      String   // PROPOSAL, MESSAGE, CONTRACT, REVIEW, SYSTEM
+  isRead    Boolean  @default(false)
+  data      Json?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+}
